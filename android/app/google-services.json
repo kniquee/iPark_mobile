@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1024113272044",
+    "firebase_url": "https://ipark-ultrasonic-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "ipark-ultrasonic",
+    "storage_bucket": "ipark-ultrasonic.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1024113272044:android:76ba9734bb435ac54bf1c9",
+        "android_client_info": {
+          "package_name": "com.example.ipark"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzCP7dEppdbSfxpPBnen19widovAt6HZo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
