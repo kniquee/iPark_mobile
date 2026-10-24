@@ -6,6 +6,7 @@ class ParkingSlot extends StatelessWidget {
   final String slotId;
   final bool occupied;
   final bool hasSensor;
+  final bool unavailable;
   final SlotPosition position;
 
   const ParkingSlot({
@@ -14,6 +15,7 @@ class ParkingSlot extends StatelessWidget {
     required this.occupied,
     required this.hasSensor,
     this.position = SlotPosition.left,
+    this.unavailable = false,
   });
 
   @override
@@ -23,7 +25,12 @@ class ParkingSlot extends StatelessWidget {
     Color textColor;
     Color carColor;
 
-    if (!hasSensor) {
+    if (unavailable) {
+      bg = const Color(0xFF1E2D3D);
+      border = const Color(0xFF3B5268);
+      textColor = const Color(0xFF94A3B8);
+      carColor = const Color(0xFFCBD5E1);
+    } else if (!hasSensor) {
       bg = const Color(0xFF1E2D3D);
       border = const Color(0xFF3B5268);
       textColor = const Color(0xFF94A3B8);
@@ -49,7 +56,7 @@ class ParkingSlot extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: border, width: 1.5),
-        boxShadow: hasSensor
+        boxShadow: hasSensor && !unavailable
             ? [
                 BoxShadow(
                   color:
@@ -66,16 +73,31 @@ class ParkingSlot extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            slotId,
-            style: TextStyle(
-              fontFamily: 'monospace',
-              color: textColor,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                slotId,
+                maxLines: 1,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  color: textColor,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
           ),
-          Icon(Icons.directions_car_rounded, color: carColor, size: 21),
+          Icon(
+            (unavailable || !hasSensor)
+                ? Icons.close_rounded
+                : Icons.directions_car_rounded,
+            color: (unavailable || !hasSensor)
+                ? const Color(0xFFE2E8F0)
+                : carColor,
+            size: (unavailable || !hasSensor) ? 24 : 19,
+          ),
         ],
       ),
     );
