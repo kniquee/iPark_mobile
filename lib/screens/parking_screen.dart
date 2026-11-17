@@ -1,4 +1,3 @@
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
 import '../services/firebase_service.dart';
@@ -13,7 +12,9 @@ class ParkingScreen extends StatelessWidget {
   static const List<String> sensorSlots = ['L1', 'M2', 'M4', 'M6', 'R3', 'R5'];
 
   bool isOccupied(Map<String, dynamic> data, String slotId) {
-    return data[slotId]?['occupied'] == true;
+    final slot = slotMap(data[slotId]);
+    return slot['occupied'] == true ||
+        '${slot['status'] ?? ''}'.toLowerCase() == 'occupied';
   }
 
   int getAvailable(Map<String, dynamic> data, Map<String, dynamic> management) {
@@ -86,10 +87,10 @@ class ParkingScreen extends StatelessWidget {
           child: Container(color: const Color(0xFF1F3348), height: 1.0),
         ),
       ),
-      body: StreamBuilder<DatabaseEvent>(
-        stream: FirebaseDatabase.instance.ref('slotManagement').onValue,
-        builder: (context, managementSnapshot) {
-          if (managementSnapshot.hasError) {
+      body: StreamBuilder<Map<String, dynamic>>(
+        stream: firebaseService.getParkingData(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
             return const Center(
               child: Text(
                 'Unable to load slot availability. Check your connection or database access.',
@@ -97,397 +98,383 @@ class ParkingScreen extends StatelessWidget {
               ),
             );
           }
-          if (!managementSnapshot.hasData) {
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final management = slotMap(managementSnapshot.data?.snapshot.value);
-          return StreamBuilder<Map<String, dynamic>>(
-            stream: firebaseService.getParkingData(),
-            builder: (context, snapshot) {
-              final data = snapshot.data ?? {};
-              final available = getAvailable(data, management);
+          final data = snapshot.data ?? {};
+          final management = data.map(
+            (id, value) => MapEntry(id, slotMap(slotMap(value)['management'])),
+          );
+          final available = getAvailable(data, management);
 
-              return _ResponsiveParkingBody(
-                child: Column(
+          return _ResponsiveParkingBody(
+            child: Column(
+              children: [
+                // STATS CARD
+                _AvailableSummary(available: available),
+
+                const SizedBox(height: 16),
+
+                // LEGEND
+                const Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 16,
+                  runSpacing: 8,
                   children: [
-                    // STATS CARD
-                    _AvailableSummary(available: available),
-
-                    const SizedBox(height: 16),
-
-                    // LEGEND
-                    const Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 16,
-                      runSpacing: 8,
-                      children: [
-                        _SlotLegendItem(
-                          label: 'Available',
-                          color: Color(0xFF34D399),
-                        ),
-                        _SlotLegendItem(
-                          label: 'Occupied',
-                          color: Color(0xFFF87171),
-                        ),
-                        _SlotLegendItem(
-                          label: 'Unavailable',
-                          color: Color(0xFF94A3B8),
-                        ),
-                      ],
+                    _SlotLegendItem(
+                      label: 'Available',
+                      color: Color(0xFF34D399),
                     ),
-                    const SizedBox(height: 16),
-                    // PARKING FLOOR CONTAINER
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF182432), // Dark slate gray floor
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: const Color(0xFF2B3C50),
-                          width: 1.5,
-                        ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black45,
-                            blurRadius: 10,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.topCenter,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            /// LEFT SIDE LAYOUT (Upper Section + Bottom Road Section)
-                            SizedBox(
-                              height: 740, // Matches total floor height
-                              child: Column(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  /// UPPER SECTION (LEFT, SHORT ROAD, MIDDLE WING)
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      /// LEFT WING
-                                      Column(
-                                        children: [
-                                          const _WingLabel(label: "LEFT"),
-                                          const SizedBox(height: 10),
-                                          Container(
-                                            padding: const EdgeInsets.only(
-                                              top: 6,
-                                              left: 6,
-                                              bottom: 6,
-                                              right: 2,
-                                            ),
-                                            decoration: const BoxDecoration(
-                                              borderRadius: BorderRadius.only(
-                                                topLeft: Radius.circular(12),
-                                                bottomLeft: Radius.circular(12),
-                                              ),
-                                              border: Border(
-                                                top: BorderSide(
-                                                  color: Color(0xFF2B3C50),
-                                                  width: 2.0,
-                                                ),
-                                                bottom: BorderSide(
-                                                  color: Color(0xFF2B3C50),
-                                                  width: 2.0,
-                                                ),
-                                                left: BorderSide(
-                                                  color: Color(0xFF2B3C50),
-                                                  width: 2.0,
-                                                ),
-                                              ),
-                                            ),
-                                            child: ManagedParkingSlot(
-                                              slotId: 'L1',
-                                              management: management,
-                                              occupied: isOccupied(data, 'L1'),
-                                              hasSensor: true,
-                                              position: SlotPosition.left,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-
-                                      const SizedBox(width: 8),
-
-                                      /// UPPER SHORT ROAD (Adjust height independently!)
-                                      const RoadWidget(
-                                        label: '',
-                                        height:
-                                            385, // ADJUST upper road height freely here
-                                        topMargin: 40.0,
-                                      ),
-
-                                      const SizedBox(width: 8),
-
-                                      /// MIDDLE WING (M1 to M7)
-                                      Column(
-                                        children: [
-                                          const _WingLabel(label: "MIDDLE"),
-                                          const SizedBox(height: 10),
-                                          Container(
-                                            padding: const EdgeInsets.only(
-                                              top: 6,
-                                              left: 6,
-                                              bottom: 6,
-                                              right: 2,
-                                            ),
-                                            decoration: const BoxDecoration(
-                                              borderRadius: BorderRadius.only(
-                                                topLeft: Radius.circular(12),
-                                                bottomLeft: Radius.circular(12),
-                                              ),
-                                              border: Border(
-                                                top: BorderSide(
-                                                  color: Color(0xFF2B3C50),
-                                                  width: 2.0,
-                                                ),
-                                                bottom: BorderSide(
-                                                  color: Color(0xFF2B3C50),
-                                                  width: 2.0,
-                                                ),
-                                                left: BorderSide(
-                                                  color: Color(0xFF2B3C50),
-                                                  width: 2.0,
-                                                ),
-                                              ),
-                                            ),
-                                            child: Column(
-                                              children: [
-                                                ManagedParkingSlot(
-                                                  slotId: 'M1',
-                                                  management: management,
-                                                  occupied: false,
-                                                  hasSensor: false,
-                                                  position: SlotPosition.left,
-                                                ),
-                                                ManagedParkingSlot(
-                                                  slotId: 'M2',
-                                                  management: management,
-                                                  occupied: isOccupied(
-                                                    data,
-                                                    'M2',
-                                                  ),
-                                                  hasSensor: true,
-                                                  position: SlotPosition.left,
-                                                ),
-                                                ManagedParkingSlot(
-                                                  slotId: 'M3',
-                                                  management: management,
-                                                  occupied: false,
-                                                  hasSensor: false,
-                                                  position: SlotPosition.left,
-                                                ),
-                                                ManagedParkingSlot(
-                                                  slotId: 'M4',
-                                                  management: management,
-                                                  occupied: isOccupied(
-                                                    data,
-                                                    'M4',
-                                                  ),
-                                                  hasSensor: true,
-                                                  position: SlotPosition.left,
-                                                ),
-                                                ManagedParkingSlot(
-                                                  slotId: 'M5',
-                                                  management: management,
-                                                  occupied: false,
-                                                  hasSensor: false,
-                                                  position: SlotPosition.left,
-                                                ),
-                                                ManagedParkingSlot(
-                                                  slotId: 'M6',
-                                                  management: management,
-                                                  occupied: isOccupied(
-                                                    data,
-                                                    'M6',
-                                                  ),
-                                                  hasSensor: true,
-                                                  position: SlotPosition.left,
-                                                ),
-                                                ManagedParkingSlot(
-                                                  slotId: 'M7',
-                                                  management: management,
-                                                  occupied: false,
-                                                  hasSensor: false,
-                                                  position: SlotPosition.left,
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-
-                                  /// ENTRANCE / EXIT BLOCK (Anchored to the bottom independently)
-                                  const BottomRoadWidget(),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(width: 8),
-
-                            /// LONG MAIN ROAD (Adjust main right road height freely here)
-                            const RoadWidget(
-                              label: '',
-                              height: 700, // Adjust long main road height here
-                              topMargin: 40.0,
-                            ),
-
-                            const SizedBox(width: 8),
-
-                            /// RIGHT WING (R1 to R13)
-                            Column(
-                              children: [
-                                const _WingLabel(label: "RIGHT"),
-                                const SizedBox(height: 10),
-                                Container(
-                                  padding: const EdgeInsets.only(
-                                    top: 6,
-                                    right: 6,
-                                    bottom: 6,
-                                    left: 2,
-                                  ),
-                                  decoration: const BoxDecoration(
-                                    borderRadius: BorderRadius.only(
-                                      topRight: Radius.circular(12),
-                                      bottomRight: Radius.circular(12),
-                                    ),
-                                    border: Border(
-                                      top: BorderSide(
-                                        color: Color(0xFF2B3C50),
-                                        width: 2.0,
-                                      ),
-                                      bottom: BorderSide(
-                                        color: Color(0xFF2B3C50),
-                                        width: 2.0,
-                                      ),
-                                      right: BorderSide(
-                                        color: Color(0xFF2B3C50),
-                                        width: 2.0,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      ManagedParkingSlot(
-                                        slotId: 'R1',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R2',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R3',
-                                        management: management,
-                                        occupied: isOccupied(data, 'R3'),
-                                        hasSensor: true,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R4',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R5',
-                                        management: management,
-                                        occupied: isOccupied(data, 'R5'),
-                                        hasSensor: true,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R6',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R7',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R8',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R9',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R10',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R11',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R12',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                      ManagedParkingSlot(
-                                        slotId: 'R13',
-                                        management: management,
-                                        occupied: false,
-                                        hasSensor: false,
-                                        position: SlotPosition.right,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                    _SlotLegendItem(
+                      label: 'Occupied',
+                      color: Color(0xFFF87171),
+                    ),
+                    _SlotLegendItem(
+                      label: 'Unavailable',
+                      color: Color(0xFF94A3B8),
                     ),
                   ],
                 ),
-              );
-            },
+                const SizedBox(height: 16),
+                // PARKING FLOOR CONTAINER
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF182432), // Dark slate gray floor
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF2B3C50),
+                      width: 1.5,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black45,
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.topCenter,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        /// LEFT SIDE LAYOUT (Upper Section + Bottom Road Section)
+                        SizedBox(
+                          height: 740, // Matches total floor height
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              /// UPPER SECTION (LEFT, SHORT ROAD, MIDDLE WING)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  /// LEFT WING
+                                  Column(
+                                    children: [
+                                      const _WingLabel(label: "LEFT"),
+                                      const SizedBox(height: 10),
+                                      Container(
+                                        padding: const EdgeInsets.only(
+                                          top: 6,
+                                          left: 6,
+                                          bottom: 6,
+                                          right: 2,
+                                        ),
+                                        decoration: const BoxDecoration(
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: Radius.circular(12),
+                                            bottomLeft: Radius.circular(12),
+                                          ),
+                                          border: Border(
+                                            top: BorderSide(
+                                              color: Color(0xFF2B3C50),
+                                              width: 2.0,
+                                            ),
+                                            bottom: BorderSide(
+                                              color: Color(0xFF2B3C50),
+                                              width: 2.0,
+                                            ),
+                                            left: BorderSide(
+                                              color: Color(0xFF2B3C50),
+                                              width: 2.0,
+                                            ),
+                                          ),
+                                        ),
+                                        child: ManagedParkingSlot(
+                                          slotId: 'L1',
+                                          management: management,
+                                          occupied: isOccupied(data, 'L1'),
+                                          hasSensor: true,
+                                          position: SlotPosition.left,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(width: 8),
+
+                                  /// UPPER SHORT ROAD (Adjust height independently!)
+                                  const RoadWidget(
+                                    label: '',
+                                    height:
+                                        385, // ADJUST upper road height freely here
+                                    topMargin: 40.0,
+                                  ),
+
+                                  const SizedBox(width: 8),
+
+                                  /// MIDDLE WING (M1 to M7)
+                                  Column(
+                                    children: [
+                                      const _WingLabel(label: "MIDDLE"),
+                                      const SizedBox(height: 10),
+                                      Container(
+                                        padding: const EdgeInsets.only(
+                                          top: 6,
+                                          left: 6,
+                                          bottom: 6,
+                                          right: 2,
+                                        ),
+                                        decoration: const BoxDecoration(
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: Radius.circular(12),
+                                            bottomLeft: Radius.circular(12),
+                                          ),
+                                          border: Border(
+                                            top: BorderSide(
+                                              color: Color(0xFF2B3C50),
+                                              width: 2.0,
+                                            ),
+                                            bottom: BorderSide(
+                                              color: Color(0xFF2B3C50),
+                                              width: 2.0,
+                                            ),
+                                            left: BorderSide(
+                                              color: Color(0xFF2B3C50),
+                                              width: 2.0,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            ManagedParkingSlot(
+                                              slotId: 'M1',
+                                              management: management,
+                                              occupied: false,
+                                              hasSensor: false,
+                                              position: SlotPosition.left,
+                                            ),
+                                            ManagedParkingSlot(
+                                              slotId: 'M2',
+                                              management: management,
+                                              occupied: isOccupied(data, 'M2'),
+                                              hasSensor: true,
+                                              position: SlotPosition.left,
+                                            ),
+                                            ManagedParkingSlot(
+                                              slotId: 'M3',
+                                              management: management,
+                                              occupied: false,
+                                              hasSensor: false,
+                                              position: SlotPosition.left,
+                                            ),
+                                            ManagedParkingSlot(
+                                              slotId: 'M4',
+                                              management: management,
+                                              occupied: isOccupied(data, 'M4'),
+                                              hasSensor: true,
+                                              position: SlotPosition.left,
+                                            ),
+                                            ManagedParkingSlot(
+                                              slotId: 'M5',
+                                              management: management,
+                                              occupied: false,
+                                              hasSensor: false,
+                                              position: SlotPosition.left,
+                                            ),
+                                            ManagedParkingSlot(
+                                              slotId: 'M6',
+                                              management: management,
+                                              occupied: isOccupied(data, 'M6'),
+                                              hasSensor: true,
+                                              position: SlotPosition.left,
+                                            ),
+                                            ManagedParkingSlot(
+                                              slotId: 'M7',
+                                              management: management,
+                                              occupied: false,
+                                              hasSensor: false,
+                                              position: SlotPosition.left,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+
+                              /// ENTRANCE / EXIT BLOCK (Anchored to the bottom independently)
+                              const BottomRoadWidget(),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        /// LONG MAIN ROAD (Adjust main right road height freely here)
+                        const RoadWidget(
+                          label: '',
+                          height: 700, // Adjust long main road height here
+                          topMargin: 40.0,
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        /// RIGHT WING (R1 to R13)
+                        Column(
+                          children: [
+                            const _WingLabel(label: "RIGHT"),
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.only(
+                                top: 6,
+                                right: 6,
+                                bottom: 6,
+                                left: 2,
+                              ),
+                              decoration: const BoxDecoration(
+                                borderRadius: BorderRadius.only(
+                                  topRight: Radius.circular(12),
+                                  bottomRight: Radius.circular(12),
+                                ),
+                                border: Border(
+                                  top: BorderSide(
+                                    color: Color(0xFF2B3C50),
+                                    width: 2.0,
+                                  ),
+                                  bottom: BorderSide(
+                                    color: Color(0xFF2B3C50),
+                                    width: 2.0,
+                                  ),
+                                  right: BorderSide(
+                                    color: Color(0xFF2B3C50),
+                                    width: 2.0,
+                                  ),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  ManagedParkingSlot(
+                                    slotId: 'R1',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R2',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R3',
+                                    management: management,
+                                    occupied: isOccupied(data, 'R3'),
+                                    hasSensor: true,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R4',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R5',
+                                    management: management,
+                                    occupied: isOccupied(data, 'R5'),
+                                    hasSensor: true,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R6',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R7',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R8',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R9',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R10',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R11',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R12',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                  ManagedParkingSlot(
+                                    slotId: 'R13',
+                                    management: management,
+                                    occupied: false,
+                                    hasSensor: false,
+                                    position: SlotPosition.right,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),

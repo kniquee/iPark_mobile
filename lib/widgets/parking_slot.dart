@@ -7,6 +7,7 @@ class ParkingSlot extends StatelessWidget {
   final bool occupied;
   final bool hasSensor;
   final bool unavailable;
+  final Map<String, dynamic> management;
   final SlotPosition position;
 
   const ParkingSlot({
@@ -16,16 +17,18 @@ class ParkingSlot extends StatelessWidget {
     required this.hasSensor,
     this.position = SlotPosition.left,
     this.unavailable = false,
+    this.management = const {},
   });
 
   @override
   Widget build(BuildContext context) {
+    final isUnavailable = unavailable || management['enabled'] == false;
     Color bg;
     Color border;
     Color textColor;
     Color carColor;
 
-    if (unavailable) {
+    if (isUnavailable) {
       bg = const Color(0xFF1E2D3D);
       border = const Color(0xFF3B5268);
       textColor = const Color(0xFF94A3B8);
@@ -56,7 +59,7 @@ class ParkingSlot extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: border, width: 1.5),
-        boxShadow: hasSensor && !unavailable
+        boxShadow: hasSensor && !isUnavailable
             ? [
                 BoxShadow(
                   color:
@@ -90,13 +93,13 @@ class ParkingSlot extends StatelessWidget {
             ),
           ),
           Icon(
-            (unavailable || !hasSensor)
+            (isUnavailable || !hasSensor)
                 ? Icons.close_rounded
                 : Icons.directions_car_rounded,
-            color: (unavailable || !hasSensor)
+            color: (isUnavailable || !hasSensor)
                 ? const Color(0xFFE2E8F0)
                 : carColor,
-            size: (unavailable || !hasSensor) ? 24 : 19,
+            size: (isUnavailable || !hasSensor) ? 24 : 19,
           ),
         ],
       ),

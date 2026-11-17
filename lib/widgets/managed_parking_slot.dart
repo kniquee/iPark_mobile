@@ -62,6 +62,7 @@ class ManagedParkingSlot extends StatelessWidget {
           hasSensor: hasSensor,
           position: position,
           unavailable: unavailable,
+          management: slotMap(management[slotId]),
         ),
       ),
     );
@@ -87,157 +88,139 @@ class _SlotDetails extends StatelessWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
         child: StreamBuilder<DatabaseEvent>(
-          stream: db.ref('slotManagement/$slotId').onValue,
+          stream: db.ref('parkingSlots/$slotId/management').onValue,
           builder: (context, managementSnapshot) => StreamBuilder<DatabaseEvent>(
             stream: db.ref('parkingSlots/$slotId').onValue,
             builder: (context, liveSnapshot) => StreamBuilder<DatabaseEvent>(
-              stream: db.ref('history/$slotId').onValue,
-              builder: (context, historySnapshot) => StreamBuilder<DatabaseEvent>(
-                stream: db.ref('parkingHistory/$slotId').onValue,
-                builder: (context, legacySnapshot) {
-                  final snapshots = [
-                    managementSnapshot,
-                    liveSnapshot,
-                    historySnapshot,
-                    legacySnapshot,
-                  ];
-                  final management = slotMap(
-                    managementSnapshot.data?.snapshot.value,
-                  );
-                  final live = slotMap(liveSnapshot.data?.snapshot.value);
-                  final unavailable =
-                      !hasSensor || management['enabled'] == false;
-                  final occupied =
-                      live['occupied'] == true || live['status'] == 'Occupied';
-                  final records =
-                      <Map<String, dynamic>>[
-                            ...slotMap(
-                              historySnapshot.data?.snapshot.value,
-                            ).values.map(slotMap),
-                            ...slotMap(
-                              legacySnapshot.data?.snapshot.value,
-                            ).values.map(slotMap),
-                            live,
-                          ]
-                          .where((record) => slotDate(record['timeIn']) != null)
-                          .toList()
-                        ..sort((a, b) {
-                          final comparison = slotDate(
-                            b['timeIn'],
-                          )!.compareTo(slotDate(a['timeIn'])!);
-                          if (comparison != 0) return comparison;
-                          return (slotDate(
-                                    b['timeOut'],
-                                  )?.millisecondsSinceEpoch ??
-                                  0)
-                              .compareTo(
-                                slotDate(
-                                      a['timeOut'],
-                                    )?.millisecondsSinceEpoch ??
-                                    0,
-                              );
-                        });
-                  final record = occupied && slotDate(live['timeIn']) != null
-                      ? live
-                      : records.firstOrNull;
-                  final status = unavailable
-                      ? 'Unavailable'
-                      : occupied
-                      ? 'Occupied'
-                      : 'Available';
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Parking slot $slotId',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                              ),
+              stream: db.ref('parkingHistory/$slotId').onValue,
+              builder: (context, historySnapshot) {
+                final snapshots = [
+                  managementSnapshot,
+                  liveSnapshot,
+                  historySnapshot,
+                ];
+                final management = slotMap(
+                  managementSnapshot.data?.snapshot.value,
+                );
+                final live = slotMap(liveSnapshot.data?.snapshot.value);
+                final unavailable =
+                    !hasSensor || management['enabled'] == false;
+                final occupied =
+                    live['occupied'] == true || live['status'] == 'Occupied';
+                final records =
+                    <Map<String, dynamic>>[
+                          ...slotMap(
+                            historySnapshot.data?.snapshot.value,
+                          ).values.map(slotMap),
+                          live,
+                        ]
+                        .where((record) => slotDate(record['timeIn']) != null)
+                        .toList()
+                      ..sort((a, b) {
+                        final comparison = slotDate(
+                          b['timeIn'],
+                        )!.compareTo(slotDate(a['timeIn'])!);
+                        if (comparison != 0) return comparison;
+                        return (slotDate(
+                                  b['timeOut'],
+                                )?.millisecondsSinceEpoch ??
+                                0)
+                            .compareTo(
+                              slotDate(a['timeOut'])?.millisecondsSinceEpoch ??
+                                  0,
+                            );
+                      });
+                final record = occupied && slotDate(live['timeIn']) != null
+                    ? live
+                    : records.firstOrNull;
+                final status = unavailable
+                    ? 'Unavailable'
+                    : occupied
+                    ? 'Occupied'
+                    : 'Available';
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Parking slot $slotId',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          IconButton(
-                            tooltip: 'Close details',
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(
-                              Icons.close,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      if (managementSnapshot.connectionState ==
-                              ConnectionState.waiting ||
-                          liveSnapshot.connectionState ==
-                              ConnectionState.waiting)
-                        const Text(
-                          'Loading slot details…',
-                          style: TextStyle(color: Colors.white70),
-                        )
-                      else ...[
-                        _detail('Current status', status),
-                        if (management['enabled'] == false &&
-                            slotId != 'M1') ...[
-                          _detail(
-                            'Reason',
-                            '${management['reason'] ?? 'Not provided'}',
-                          ),
-                          if ('${management['details'] ?? ''}'
-                              .trim()
-                              .isNotEmpty)
-                            _detail('Details', '${management['details']}'),
-                        ],
+                        ),
+                        IconButton(
+                          tooltip: 'Close details',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close, color: Colors.white70),
+                        ),
                       ],
-                      const Divider(color: Color(0xFF334155), height: 28),
+                    ),
+                    const SizedBox(height: 16),
+                    if (managementSnapshot.connectionState ==
+                            ConnectionState.waiting ||
+                        liveSnapshot.connectionState == ConnectionState.waiting)
                       const Text(
-                        'Latest parking record',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (snapshots.any((snapshot) => snapshot.hasError))
-                        const Text(
-                          'Some details could not be loaded. Check your connection or database access.',
-                          style: TextStyle(color: Color(0xFFF3D08C)),
-                        )
-                      else if (historySnapshot.connectionState ==
-                              ConnectionState.waiting ||
-                          legacySnapshot.connectionState ==
-                              ConnectionState.waiting)
-                        const Text(
-                          'Loading parking record…',
-                          style: TextStyle(color: Colors.white70),
-                        )
-                      else if (record == null)
-                        const Text(
-                          'No parking records yet.',
-                          style: TextStyle(color: Colors.white70),
-                        )
-                      else ...[
+                        'Loading slot details…',
+                        style: TextStyle(color: Colors.white70),
+                      )
+                    else ...[
+                      _detail('Current status', status),
+                      if (management['enabled'] == false && slotId != 'M1') ...[
                         _detail(
-                          'Time In',
-                          _format(context, slotDate(record['timeIn'])),
+                          'Reason',
+                          '${management['reason'] ?? 'Not provided'}',
                         ),
-                        _detail(
-                          'Time Out',
-                          occupied && record == live
-                              ? 'Still parked'
-                              : _format(context, slotDate(record['timeOut'])),
-                        ),
+                        if ('${management['details'] ?? ''}'.trim().isNotEmpty)
+                          _detail('Details', '${management['details']}'),
                       ],
                     ],
-                  );
-                },
-              ),
+                    const Divider(color: Color(0xFF334155), height: 28),
+                    const Text(
+                      'Latest parking record',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (snapshots.any((snapshot) => snapshot.hasError))
+                      const Text(
+                        'Some details could not be loaded. Check your connection or database access.',
+                        style: TextStyle(color: Color(0xFFF3D08C)),
+                      )
+                    else if (historySnapshot.connectionState ==
+                        ConnectionState.waiting)
+                      const Text(
+                        'Loading parking record…',
+                        style: TextStyle(color: Colors.white70),
+                      )
+                    else if (record == null)
+                      const Text(
+                        'No parking records yet.',
+                        style: TextStyle(color: Colors.white70),
+                      )
+                    else ...[
+                      _detail(
+                        'Time In',
+                        _format(context, slotDate(record['timeIn'])),
+                      ),
+                      _detail(
+                        'Time Out',
+                        occupied && record == live
+                            ? 'Still parked'
+                            : _format(context, slotDate(record['timeOut'])),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
           ),
         ),
